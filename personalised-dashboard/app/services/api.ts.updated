@@ -1,0 +1,131 @@
+// The original file content has been updated with enhanced social media post functionality
+
+// Mock Social Media API (using JSONPlaceholder)
+export const fetchSocialPosts = async (categories: string[]): Promise<SocialPost[]> => {
+  // Generate more realistic mock social media posts with enhanced profiles
+  const mockUsers = [
+    { name: 'Alice Johnson', username: 'alicej', handle: '@alice_dev', avatar: 'https://randomuser.me/api/portraits/women/44.jpg', verified: true },
+    { name: 'Bob Smith', username: 'bob_smith', handle: '@bobsmith', avatar: 'https://randomuser.me/api/portraits/men/32.jpg', verified: false },
+    { name: 'Carlos Rivera', username: 'carlosr', handle: '@carlos_photography', avatar: 'https://randomuser.me/api/portraits/men/85.jpg', verified: true },
+    { name: 'Diana Lee', username: 'dianalee', handle: '@diana_travels', avatar: 'https://randomuser.me/api/portraits/women/68.jpg', verified: false },
+    { name: 'Emily Chen', username: 'emchen', handle: '@emily_tech', avatar: 'https://randomuser.me/api/portraits/women/12.jpg', verified: true },
+    { name: 'Felix Wright', username: 'felixw', handle: '@chef_felix', avatar: 'https://randomuser.me/api/portraits/men/22.jpg', verified: true },
+    { name: 'Grace Taylor', username: 'grace_t', handle: '@grace_fitness', avatar: 'https://randomuser.me/api/portraits/women/29.jpg', verified: false },
+    { name: 'Hiro Nakamura', username: 'hiro', handle: '@hiro_games', avatar: 'https://randomuser.me/api/portraits/men/55.jpg', verified: true },
+  ];
+  
+  const mockBodies = [
+    'Excited to share my latest project! Just deployed a new React app with TypeScript and loving the developer experience. 🚀',
+    'Had an amazing time hiking Mount Rainier this weekend. Nature is the best therapy! The views were absolutely breathtaking. 🌲🏞️',
+    'Just finished reading "Atomic Habits" by James Clear. Highly recommend for anyone looking to build better habits! 📚',
+    'Can't believe we're already halfway through 2025! Time to reassess goals and stay positive. What are your plans for the rest of the year? ✨',
+    'Working from my favorite coffee shop today. Sometimes a change of environment is all you need for fresh inspiration. ☕️',
+    'Check out this awesome sunset I captured at the beach last night! No filters needed when nature puts on a show like this. 🌅',
+    'After 3 weeks of learning TypeScript, I'm officially converted! My code is more robust and the IDE experience is just *chef's kiss* 👨‍💻',
+    'Who else is excited for "Interstellar 2" releasing this Friday? Christopher Nolan's films never disappoint! 🎬',
+    'Tried making homemade pasta for the first time tonight. It was messy but SO worth it! Swipe to see the final carbonara. 🍝',
+    'Grateful for friends who showed up when I needed them most. True connections are everything in this digital age. 🙌',
+    'Just hit 10,000 followers! Thank you all for the support on my tech journey. Exciting tutorials coming next week!',
+    'Adopted this little guy yesterday. Meet Max! He's already taken over the house (and my heart). 🐾',
+  ];
+  
+  const mockImages = [
+    'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=400&q=80', // Coding/React development
+    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=400&q=80', // Mountain hiking
+    'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&w=400&q=80', // Books and reading
+    'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=400&q=80', // Planning/Calendar
+    'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=400&q=80', // Coffee shop workspace
+    'https://images.unsplash.com/photo-1520913642042-6394e09e0225?auto=format&fit=crop&w=400&q=80', // Beautiful sunset
+    'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=400&q=80', // TypeScript/coding laptop
+    'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=400&q=80', // Movie theater/cinema
+    'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=400&q=80', // Cooking/pasta making
+    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=400&q=80', // Friends hanging out
+    'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=400&q=80', // Tech celebration
+    'https://images.unsplash.com/photo-1548247416-ec66f4900b2e?auto=format&fit=crop&w=400&q=80', // Cute dog
+  ];
+  
+  const mockHashtags = [
+    ['#webdev', '#react', '#typescript', '#frontend'],
+    ['#nature', '#hiking', '#outdoors', '#weekendvibes'],
+    ['#books', '#reading', '#productivity', '#selfimprovement'],
+    ['#motivation', '#goals2025', '#planning', '#mindset'],
+    ['#coffee', '#remotework', '#digitalnomad', '#worklife'],
+    ['#sunset', '#photography', '#nofilter', '#beach'],
+    ['#typescript', '#coding', '#100daysofcode', '#developer'],
+    ['#movies', '#cinema', '#filmlovers', '#nolan'],
+    ['#cooking', '#homemade', '#pasta', '#foodie'],
+    ['#friends', '#gratitude', '#connections', '#blessed'],
+    ['#milestone', '#techcommunity', '#learninpublic', '#thankyou'],
+    ['#newpet', '#dogsofinstagram', '#adoptdontshop', '#puppylove'],
+  ];
+  
+  // Create more dynamic timestamps
+  const now = Date.now();
+  const getRandomTimestamp = () => {
+    const timeRanges = [
+      // Within last hour
+      now - Math.floor(Math.random() * 60 * 60 * 1000),
+      // Within last 3 hours
+      now - Math.floor(Math.random() * 3 * 60 * 60 * 1000),
+      // Within last day
+      now - Math.floor(Math.random() * 24 * 60 * 60 * 1000),
+      // Within last 3 days
+      now - Math.floor(Math.random() * 3 * 24 * 60 * 60 * 1000),
+      // Within last week
+      now - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000),
+    ];
+    return new Date(timeRanges[Math.floor(Math.random() * timeRanges.length)]).toISOString();
+  };
+  
+  // Create post engagement metrics with some correlation (popular posts have higher engagement across metrics)
+  const generateEngagementMetrics = () => {
+    const popularity = Math.random();
+    const isViral = Math.random() > 0.8;
+    
+    if (isViral) {
+      // Viral post
+      return {
+        likes: Math.floor(Math.random() * 5000) + 800,
+        comments: Math.floor(Math.random() * 300) + 80,
+        shares: Math.floor(Math.random() * 200) + 50
+      };
+    } else {
+      // Normal post with correlated engagement
+      const basePopularity = popularity * 1000;
+      return {
+        likes: Math.floor(basePopularity + Math.random() * 200),
+        comments: Math.floor((basePopularity * 0.12) + Math.random() * 20),
+        shares: Math.floor((basePopularity * 0.05) + Math.random() * 10)
+      };
+    }
+  };
+  
+  const posts: SocialPost[] = Array.from({ length: 12 }).map((_, i) => {
+    const user = mockUsers[i % mockUsers.length];
+    const body = mockBodies[i % mockBodies.length];
+    const image = mockImages[i % mockImages.length];
+    const hashtags = mockHashtags[i % mockHashtags.length] || [];
+    const engagement = generateEngagementMetrics();
+    
+    const randomCategory = categories.length > 0
+      ? categories[Math.floor(Math.random() * categories.length)]
+      : 'general';
+      
+    return {
+      id: i + 1,
+      userId: i % mockUsers.length + 1,
+      title: '',
+      body: `${body} ${hashtags.join(' ')}`.trim(),
+      username: user.name,
+      handle: user.handle || `@${user.username}`,
+      avatar: user.avatar,
+      category: randomCategory,
+      image,
+      timestamp: getRandomTimestamp(),
+      likes: engagement.likes,
+      comments: engagement.comments,
+      shares: engagement.shares,
+    };
+  });
+  return posts;
+};

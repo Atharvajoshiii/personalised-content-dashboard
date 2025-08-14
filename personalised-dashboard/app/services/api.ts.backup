@@ -1,0 +1,523 @@
+import axios from 'axios';
+import { MovieItem, NewsApiResponse, NewsItem, OmdbApiResponse, SocialPost } from '../types';
+import { v4 as uuidv4 } from 'uuid';
+import { apiKeys, isNewsApiKeyValid, isOmdbApiKeyValid } from './apiKeys';
+
+// News API service
+const NEWS_API_KEY = apiKeys.NEWS_API_KEY  const mockBodies = [
+    'Excited to share my latest project! Just deployed a new React dashboard with real-time data 🚀',
+    'Had an amazing time hiking this weekend. Nature is the best therapy! The views were absolutely breathtaking 🌲🏞️',
+    'Just finished reading this incredible book on productivity and mindset. Highly recommend for anyone looking to level up 📚',
+    'Can't believe how fast this year is flying by. Stay positive, everyone! Remember to appreciate the small moments ✨',
+    'Working from my favorite coffee shop today. Love the atmosphere here, perfect for deep focus sessions ☕️',
+    'Check out this awesome sunset I captured last night! Worth the early wake up for this golden hour magic 🌅',
+    'Learning TypeScript has been a game changer for my coding workflow. The type safety is incredible 💻',
+    'Who else is excited for the new Marvel movie release this Friday? Already got my tickets for opening night 🎬',
+    'Trying out a new Italian recipe tonight. Homemade pasta from scratch! Wish me luck in the kitchen 🍝',
+    'Grateful for good friends and good vibes. Weekend hangouts like these are what life is all about 🙌',
+  ];S_API_URL = 'https://newsapi.org/v2';
+
+/**
+ * Fetches trending news articles using NewsAPI's `everything` endpoint.
+ * Articles are sorted by popularity, and can be optionally filtered by date range.
+ * 
+ * @param {Object} options - Optional parameters for the API request
+ * @param {string} options.q - Optional search keyword(s)
+ * @param {string} options.from - Optional ISO 8601 start date
+ * @param {string} options.to - Optional ISO 8601 end date
+ * @param {string} options.language - Optional language filter (e.g., "en")
+ * @param {number} options.pageSize - Number of results per page (max 100)
+ * @param {number} options.page - Optional page number for pagination
+ * @returns {Promise<NewsItem[]>} Array of news items
+ */
+export const fetchTrendingNews = async (options: {
+  q?: string;
+  from?: string;
+  to?: string;
+  language?: string;
+  pageSize?: number;
+  page?: number;
+} = {}): Promise<NewsItem[]> => {
+  try {
+    // Validate API key
+    if (!isNewsApiKeyValid()) {
+      console.error('News API key is invalid or missing. Please check your environment variables.');
+      throw new Error('Invalid or missing News API key');
+    }
+
+    const defaultParams = {
+      sortBy: 'popularity', // Sort by popularity
+      language: 'en',       // Default to English
+      pageSize: 20,         // Default page size
+      page: 1               // Default to first page
+    };
+
+    // Merge default params with user options
+    const params = {
+      ...defaultParams,
+      ...options,
+      apiKey: NEWS_API_KEY
+    };
+
+    // If no query is provided, use a general query that returns popular news
+    if (!params.q) {
+      params.q = 'news';
+    }
+    
+    const response = await axios.get<NewsApiResponse>(
+      `${NEWS_API_URL}/everything`,
+      {
+        params,
+        timeout: 10000,
+      }
+    );
+
+    if (!response.data.articles || response.data.articles.length === 0) {
+      return [];
+    }
+
+    // Validate and sanitize each article before returning
+    const validArticles = response.data.articles.filter(article => 
+      article.title && 
+      article.url && 
+      (article.description || article.content)
+    );
+
+    // Map response to NewsItem format with added id and category
+    return validArticles.map((article) => ({
+      ...article,
+      id: uuidv4(),
+      title: article.title || 'Untitled Article',
+      description: article.description || article.content?.substring(0, 160) || 'No description available',
+      category: 'trending' // Mark all as trending
+    }));
+  } catch (error: any) {
+    console.error('Error fetching trending news:', error.message || error);
+    return [];
+  }
+};
+
+export const fetchNews = async (categories: string[]): Promise<NewsItem[]> => {
+  try {
+    // Validate API key
+    if (!isNewsApiKeyValid()) {
+      console.error('News API key is invalid or missing. Please check your environment variables.');
+      throw new Error('Invalid or missing News API key');
+    }
+
+    // If no categories are selected, fetch all supported categories
+    const supportedCategories = ['business', 'entertainment', 'general', 'health', 'science', 'sports', 'technology'];
+    
+    // Handle invalid categories and fallbacks
+    let userCategories: string[] = [];
+    
+    if (categories && categories.length > 0) {
+      // Filter only valid categories
+      userCategories = categories.filter(cat => supportedCategories.includes(cat));
+      
+      // If no valid categories remain, use general as fallback
+      if (userCategories.length === 0) {
+        userCategories = ['general'];
+        console.log('No valid categories selected, falling back to "general"');
+      }
+    } else {
+      // If no categories specified, use all supported categories
+      userCategories = supportedCategories;
+    }
+
+    // Fetch news for each category in parallel
+    const allResults = await Promise.all(
+      userCategories.map(async (category) => {
+        try {
+          const response = await axios.get<NewsApiResponse>(
+            `${NEWS_API_URL}/top-headlines`,
+            {
+              params: {
+                apiKey: NEWS_API_KEY,
+                country: 'us',
+                category,
+                pageSize: 100, // Get maximum available articles per category
+              },
+              timeout: 10000,
+            }
+          );
+          if (!response.data.articles || response.data.articles.length === 0) {
+            return [];
+          }
+          // Validate and sanitize each article before returning
+          const validArticles = response.data.articles.filter(article => 
+            article.title && 
+            article.url && 
+            (article.description || article.content)
+          );
+          // Map response to NewsItem format with added id and category
+          return validArticles.map((article) => ({
+            ...article,
+            id: uuidv4(),
+            title: article.title || 'Untitled Article',
+            description: article.description || article.content?.substring(0, 160) || 'No description available',
+            category, // Store the category with each article
+          }));
+        } catch (err) {
+          console.error(`Error fetching news for category '${category}':`, err);
+          return [];
+        }
+      })
+    );
+
+    // Flatten and deduplicate articles by url
+    const allArticles = allResults.flat();
+    const seenUrls = new Set<string>();
+    const dedupedArticles: NewsItem[] = [];
+    for (const article of allArticles) {
+      if (!seenUrls.has(article.url)) {
+        seenUrls.add(article.url);
+        dedupedArticles.push(article);
+      }
+    }
+    return dedupedArticles;
+  } catch (error: any) {
+    console.error('Error fetching news:', error.message || error);
+    return [];
+  }
+};
+
+// Helper function to determine the category of a news article
+const determineCategoryFromArticle = (
+  article: Omit<NewsItem, 'id' | 'category'>,
+  userCategories: string[]
+): string => {
+  const title = article.title?.toLowerCase() || '';
+  const description = article.description?.toLowerCase() || '';
+  const content = article.content?.toLowerCase() || '';
+
+  // Check if any user category appears in the article content
+  for (const category of userCategories) {
+    const categoryLower = category.toLowerCase();
+    if (
+      title.includes(categoryLower) ||
+      description.includes(categoryLower) ||
+      content.includes(categoryLower)
+    ) {
+      return category;
+    }
+  }
+
+  // Default category
+  return 'general';
+};
+
+// OMDB API service
+const OMDB_API_KEY = apiKeys.OMDB_API_KEY;
+const OMDB_API_URL = 'https://www.omdbapi.com/';
+
+export const fetchMovies = async (categories: string[]): Promise<MovieItem[]> => {
+  try {
+    // Validate API key
+    if (!isOmdbApiKeyValid()) {
+      console.error('OMDB API key is invalid or missing. Please check your environment variables.');
+      throw new Error('Invalid or missing OMDB API key');
+    }
+    
+    // Map categories to relevant search terms for movies
+    const searchTerms = mapCategoriesToMovieTerms(categories);
+    
+    // Fetch movies for each search term
+    const allMoviePromises = searchTerms.map(async (term) => {
+      const response = await axios.get<OmdbApiResponse>(
+        OMDB_API_URL,
+        {
+          params: {
+            apikey: OMDB_API_KEY,
+            s: term,
+            type: 'movie',
+          },
+        }
+      );
+
+      if (response.data.Response === 'True' && response.data.Search) {
+        return response.data.Search.map((movie) => ({
+          id: uuidv4(),
+          title: movie.Title,
+          year: movie.Year,
+          poster: movie.Poster,
+          type: movie.Type,
+          imdbID: movie.imdbID,
+          category: getCategoryFromSearchTerm(term, categories),
+        }));
+      }
+      return [];
+    });
+
+    // Combine all movie results and limit to 10 movies
+    const allMovies = (await Promise.all(allMoviePromises)).flat();
+    return allMovies.slice(0, 10);
+  } catch (error) {
+    console.error('Error fetching movies:', error);
+    return [];
+  }
+};
+
+// Helper function to map user categories to relevant movie search terms
+const mapCategoriesToMovieTerms = (categories: string[]): string[] => {
+  if (categories.length === 0) {
+    return ['popular'];
+  }
+
+  const categoryToTermMap: Record<string, string> = {
+    technology: 'sci-fi',
+    sports: 'sports',
+    finance: 'finance',
+    politics: 'political',
+    entertainment: 'comedy',
+    health: 'medical',
+    science: 'science',
+    education: 'documentary',
+    travel: 'adventure',
+    fashion: 'drama',
+  };
+
+  return categories.map((category) => categoryToTermMap[category.toLowerCase()] || category);
+};
+
+// Helper function to get the category from a search term
+const getCategoryFromSearchTerm = (term: string, userCategories: string[]): string => {
+  const termToCategory: Record<string, string> = {
+    'sci-fi': 'technology',
+    'sports': 'sports',
+    'finance': 'finance',
+    'political': 'politics',
+    'comedy': 'entertainment',
+    'medical': 'health',
+    'science': 'science',
+    'documentary': 'education',
+    'adventure': 'travel',
+    'drama': 'fashion',
+  };
+
+  const category = termToCategory[term];
+  return category && userCategories.includes(category) ? category : 'entertainment';
+};
+
+// Mock Social Media API (using JSONPlaceholder)
+export const fetchSocialPosts = async (categories: string[]): Promise<SocialPost[]> => {
+  // Generate more realistic mock social media posts
+  const mockUsers = [
+    { name: 'Alice Johnson', username: 'alicej', avatar: 'https://randomuser.me/api/portraits/women/44.jpg' },
+    { name: 'Bob Smith', username: 'bob_smith', avatar: 'https://randomuser.me/api/portraits/men/32.jpg' },
+    { name: 'Carlos Rivera', username: 'carlosr', avatar: 'https://randomuser.me/api/portraits/men/85.jpg' },
+    { name: 'Diana Lee', username: 'dianalee', avatar: 'https://randomuser.me/api/portraits/women/68.jpg' },
+    { name: 'Emily Chen', username: 'emchen', avatar: 'https://randomuser.me/api/portraits/women/12.jpg' },
+  ];
+  const mockBodies = [
+    'Excited to share my latest project! 🚀 #webdev #react',
+    'Had an amazing time hiking this weekend. Nature is the best therapy! 🌲🏞️',
+    'Just finished reading a great book on productivity. Highly recommend! 📚',
+    'Can’t believe how fast this year is flying by. Stay positive, everyone! ✨',
+    'Working from my favorite coffee shop today ☕️ #remotework',
+    'Check out this awesome sunset I captured last night! 🌅',
+    'Learning TypeScript has been a game changer for my coding workflow. #typescript',
+    'Who else is excited for the new movie release this Friday? 🎬',
+    'Trying out a new recipe tonight. Wish me luck! 🍝',
+    'Grateful for good friends and good vibes. 🙌',
+  ];
+  const mockImages = [
+    'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=400&q=80', // Coding/React development
+    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=400&q=80', // Mountain hiking
+    'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&w=400&q=80', // Books and reading
+    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=400&q=80', // Motivational landscape
+    'https://images.unsplash.com/photo-1541167760496-1628856ab772?auto=format&fit=crop&w=400&q=80', // Coffee shop workspace
+    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=400&q=80', // Beautiful sunset
+    'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=400&q=80', // TypeScript/coding laptop
+    'https://images.unsplash.com/photo-1489599859473-790b99926305?auto=format&fit=crop&w=400&q=80', // Movie theater/cinema
+    'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=400&q=80', // Cooking/pasta making
+    'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=400&q=80', // Friends hanging out
+  ];
+  const mockHashtags = [
+    ['#webdev', '#react'],
+    ['#nature', '#hiking'],
+    ['#books', '#productivity'],
+    ['#motivation'],
+    ['#coffee', '#remotework'],
+    ['#sunset'],
+    ['#typescript', '#coding'],
+    ['#movies'],
+    ['#cooking'],
+    ['#friends', '#gratitude'],
+  ];
+  const now = Date.now();
+  const posts: SocialPost[] = Array.from({ length: 10 }).map((_, i) => {
+    const user = mockUsers[i % mockUsers.length];
+    const body = mockBodies[i];
+    const image = mockImages[i];
+    const hashtags = mockHashtags[i];
+    const randomCategory = categories.length > 0
+      ? categories[Math.floor(Math.random() * categories.length)]
+      : 'general';
+    // Random time within the last 7 days
+    const timestamp = new Date(now - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)).toISOString();
+    return {
+      id: i + 1,
+      userId: i % mockUsers.length + 1,
+      title: '',
+      body: `${body} ${hashtags.join(' ')}`.trim(),
+      username: user.name,
+      handle: `@${user.username}`,
+      avatar: user.avatar,
+      category: randomCategory,
+      image,
+      timestamp,
+    };
+  });
+  return posts;
+};
+
+// Search across all content types
+export const searchContent = async (
+  query: string,
+  categories: string[]
+): Promise<{
+  news: NewsItem[];
+  movies: MovieItem[];
+  social: SocialPost[];
+}> => {
+  try {
+    const [news, movies, social] = await Promise.all([
+      fetchNewsSearch(query),
+      fetchMoviesSearch(query),
+      fetchSocialSearch(query, categories),
+    ]);
+
+    return {
+      news,
+      movies,
+      social,
+    };
+  } catch (error) {
+    console.error('Error searching content:', error);
+    return { news: [], movies: [], social: [] };
+  }
+};
+
+// Search news
+const fetchNewsSearch = async (query: string): Promise<NewsItem[]> => {
+  try {
+    if (!isNewsApiKeyValid()) {
+      console.error('News API key is invalid or missing. Please check your environment variables.');
+      throw new Error('Invalid or missing News API key');
+    }
+    
+    if (!query || query.trim() === '') {
+      console.warn('Empty search query provided');
+      return [];
+    }
+    
+    const response = await axios.get<NewsApiResponse>(
+      `${NEWS_API_URL}/everything`,
+      {
+        params: {
+          apiKey: NEWS_API_KEY,
+          q: query,
+          language: 'en',
+          pageSize: 5,
+          sortBy: 'relevancy',
+        },
+        timeout: 10000, // 10 second timeout
+      }
+    );
+
+    if (!response.data.articles || response.data.articles.length === 0) {
+      console.log('No search results found for query:', query);
+      return [];
+    }
+
+    // Validate and sanitize each article before returning
+    const validArticles = response.data.articles.filter(article => 
+      article.title && 
+      article.url && 
+      (article.description || article.content)
+    );
+
+    return validArticles.map((article) => ({
+      ...article,
+      id: uuidv4(),
+      title: article.title || 'Untitled Article',
+      description: article.description || article.content?.substring(0, 160) || 'No description available',
+      category: 'search',
+    }));
+  } catch (error: any) {
+    console.error('Error searching news:', error.message || error);
+    return [];
+  }
+};
+
+// Search movies
+const fetchMoviesSearch = async (query: string): Promise<MovieItem[]> => {
+  try {
+    if (!isOmdbApiKeyValid()) {
+      console.error('OMDB API key is invalid or missing. Please check your environment variables.');
+      throw new Error('Invalid or missing OMDB API key');
+    }
+    
+    const response = await axios.get<OmdbApiResponse>(
+      OMDB_API_URL,
+      {
+        params: {
+          apikey: OMDB_API_KEY,
+          s: query,
+        },
+      }
+    );
+
+    if (response.data.Response === 'True' && response.data.Search) {
+      return response.data.Search.map((movie) => ({
+        id: uuidv4(),
+        title: movie.Title,
+        year: movie.Year,
+        poster: movie.Poster,
+        type: movie.Type,
+        imdbID: movie.imdbID,
+        category: 'search',
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error('Error searching movies:', error);
+    return [];
+  }
+};
+
+// Search social posts (mocked with JSONPlaceholder)
+const fetchSocialSearch = async (
+  query: string,
+  categories: string[]
+): Promise<SocialPost[]> => {
+  try {
+    const response = await axios.get('https://jsonplaceholder.typicode.com/posts');
+    const users = await axios.get('https://jsonplaceholder.typicode.com/users');
+    
+    const filteredPosts = response.data
+      .filter((post: any) => {
+        const title = post.title.toLowerCase();
+        const body = post.body.toLowerCase();
+        const queryLower = query.toLowerCase();
+        return title.includes(queryLower) || body.includes(queryLower);
+      })
+      .slice(0, 5)
+      .map((post: any) => {
+        const user = users.data.find((u: any) => u.id === post.userId);
+        return {
+          ...post,
+          username: user?.name || `User ${post.userId}`,
+          category: 'search',
+          image: `https://picsum.photos/seed/${post.id}/300/200`,
+          timestamp: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
+        };
+      });
+      
+    return filteredPosts;
+  } catch (error) {
+    console.error('Error searching social posts:', error);
+    return [];
+  }
+};
